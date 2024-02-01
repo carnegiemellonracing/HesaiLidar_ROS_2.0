@@ -39,11 +39,12 @@
 #include <chrono>
 #include <string>
 #include <functional>
-#ifdef __CUDACC__
-  #include "hesai_lidar_sdk_gpu.cuh"
-#else
-  #include "hesai_lidar_sdk.hpp"
-#endif
+#include "hesai_lidar_sdk.hpp"
+// #ifdef __CUDACC__
+//   #include "hesai_lidar_sdk_gpu.cuh"
+// #else
+//   #include "hesai_lidar_sdk.hpp"
+// #endif
 class SourceDriver
 {
 public:
@@ -69,11 +70,12 @@ protected:
   sensor_msgs::msg::PointCloud2 ToRosMsg(const LidarDecodedFrame<LidarPointXYZIRT>& frame, const std::string& frame_id);
   // Convert packets into ROS messages
   hesai_ros_driver::msg::UdpFrame ToRosMsg(const UdpFrame_t& ros_msg, double timestamp);
-  #ifdef __CUDACC__
-    std::shared_ptr<HesaiLidarSdkGpu<LidarPointXYZIRT>> driver_ptr_;
-  #else
-    std::shared_ptr<HesaiLidarSdk<LidarPointXYZIRT>> driver_ptr_;
-  #endif
+  std::shared_ptr<HesaiLidarSdk<LidarPointXYZIRT>> driver_ptr_;
+  // #ifdef __CUDACC__
+  //   std::shared_ptr<HesaiLidarSdkGpu<LidarPointXYZIRT>> driver_ptr_;
+  // #else
+  //   std::shared_ptr<HesaiLidarSdk<LidarPointXYZIRT>> driver_ptr_;
+  // #endif
   std::string frame_id_;
   rclcpp::Subscription<hesai_ros_driver::msg::UdpFrame>::SharedPtr pkt_sub_;
   rclcpp::Publisher<hesai_ros_driver::msg::UdpFrame>::SharedPtr pkt_pub_;
@@ -141,14 +143,16 @@ inline void SourceDriver::Init(const YAML::Node& config)
     driver_param.decoder_param.enable_udp_thread = false;
     subscription_spin_thread_ = new boost::thread(boost::bind(&SourceDriver::SpinRos2,this));
   }
-  #ifdef __CUDACC__
-    driver_ptr_.reset(new HesaiLidarSdkGpu<LidarPointXYZIRT>());
-    driver_param.decoder_param.enable_parser_thread = false;
-  #else
-    driver_ptr_.reset(new HesaiLidarSdk<LidarPointXYZIRT>());
-    driver_param.decoder_param.enable_parser_thread = true;
+  driver_ptr_.reset(new HesaiLidarSdk<LidarPointXYZIRT>());
+  driver_param.decoder_param.enable_parser_thread = true;
+  // #ifdef __CUDACC__
+  //   driver_ptr_.reset(new HesaiLidarSdkGpu<LidarPointXYZIRT>());
+  //   driver_param.decoder_param.enable_parser_thread = false;
+  // #else
+  //   driver_ptr_.reset(new HesaiLidarSdk<LidarPointXYZIRT>());
+  //   driver_param.decoder_param.enable_parser_thread = true;
     
-  #endif
+  // #endif
   driver_ptr_->RegRecvCallback(std::bind(&SourceDriver::SendPointCloud, this, std::placeholders::_1));
   if(send_packet_ros && driver_param.input_param.source_type != DATA_FROM_ROS_PACKET){
     driver_ptr_->RegRecvCallback(std::bind(&SourceDriver::SendPacket, this, std::placeholders::_1, std::placeholders::_2)) ;
