@@ -40,6 +40,15 @@
 #include <string>
 #include <functional>
 
+/* @brief set to true to remove all points at the origin prior to publishing point cloud */
+#define FILTER_INVALID_POINTS true
+
+/* @brief uncomment to add intensity fields for intensity information */
+#define ADD_INTENSITY_FIELD
+
+/* @brief uncomment to add intensity, ring, and timestamp fields for more pointcloud information */
+#define ADD_EXTRA_FIELDS
+
 #undef __CUDACC__ // remove this line to allow CUDA usage
 #ifdef __CUDACC__
   #include "hesai_lidar_sdk_gpu.cuh"
@@ -47,6 +56,7 @@
   #include "hesai_lidar_sdk.hpp"
 #endif
 
+#define EPS 0.0000001
 
 class SourceDriver
 {
@@ -189,6 +199,11 @@ inline void SourceDriver::SendPointCloud(const LidarDecodedFrame<LidarPointXYZIR
   pub_->publish(ToRosMsg(msg, frame_id_));
 }
 
+inline bool is_invalid_point(LidarPointXYZIRT point) 
+{
+  return point.x < EPS && point.y < EPS && point.z < EPS; 
+}
+
 inline sensor_msgs::msg::PointCloud2 SourceDriver::ToRosMsg(const LidarDecodedFrame<LidarPointXYZIRT>& frame, const std::string& frame_id)
 {
   sensor_msgs::msg::PointCloud2 ros_msg;
@@ -203,9 +218,15 @@ inline sensor_msgs::msg::PointCloud2 SourceDriver::ToRosMsg(const LidarDecodedFr
   offset = addPointField(ros_msg, "x", 1, sensor_msgs::msg::PointField::FLOAT32, offset);
   offset = addPointField(ros_msg, "y", 1, sensor_msgs::msg::PointField::FLOAT32, offset);
   offset = addPointField(ros_msg, "z", 1, sensor_msgs::msg::PointField::FLOAT32, offset);
+  
+#ifdef ADD_INTENSITY_FIELD
   offset = addPointField(ros_msg, "intensity", 1, sensor_msgs::msg::PointField::FLOAT32, offset);
+#endif
+
+#ifdef ADD_EXTRA_FIELDS
   offset = addPointField(ros_msg, "ring", 1, sensor_msgs::msg::PointField::UINT16, offset);
   offset = addPointField(ros_msg, "timestamp", 1, sensor_msgs::msg::PointField::FLOAT64, offset);
+#endif
 
 
   ros_msg.point_step = offset;
@@ -216,27 +237,60 @@ inline sensor_msgs::msg::PointCloud2 SourceDriver::ToRosMsg(const LidarDecodedFr
   sensor_msgs::PointCloud2Iterator<float> iter_x_(ros_msg, "x");
   sensor_msgs::PointCloud2Iterator<float> iter_y_(ros_msg, "y");
   sensor_msgs::PointCloud2Iterator<float> iter_z_(ros_msg, "z");
+
+#ifdef ADD_INTENSITY_FIELD
   sensor_msgs::PointCloud2Iterator<float> iter_intensity_(ros_msg, "intensity");
+#endif
+
+#ifdef ADD_EXTRA_FIELDS
   sensor_msgs::PointCloud2Iterator<uint16_t> iter_ring_(ros_msg, "ring");
   sensor_msgs::PointCloud2Iterator<double> iter_timestamp_(ros_msg, "timestamp");
-  
+#endif
+
+  float eps = 0.000001;
+  uint32_t valid_point_count = 0;
+
   for (size_t i = 0; i < frame.points_num; i++)
   {
     LidarPointXYZIRT point = frame.points[i];
+
+    // ignore points that occur at the origin
+    if (FILTER_INVALID_POINTS && is_invalid_point(point)) 
+    { 
+      continue; 
+    }
+
     *iter_x_ = point.x;
     *iter_y_ = point.y;
     *iter_z_ = point.z;
-    *iter_intensity_ = point.intensity;
-    *iter_ring_ = point.ring;
-    *iter_timestamp_ = point.timestamp;
     ++iter_x_;
     ++iter_y_;
     ++iter_z_;
+
+#ifdef ADD_INTENSITY_FIELD
+    *iter_intensity_ = point.intensity;
     ++iter_intensity_;
+#endif
+
+#ifdef ADD_EXTRA_FIELDS
+    *iter_ring_ = point.ring;
+    *iter_timestamp_ = point.timestamp;
     ++iter_ring_;
-    ++iter_timestamp_;   
+    ++iter_timestamp_;
+#endif
+
+    ++valid_point_count;   
   }
-  printf("frame:%d points:%u packet:%d start time:%lf end time:%lf\n",frame.frame_index, frame.points_num, frame.packet_num, frame.points[0].timestamp, frame.points[frame.points_num - 1].timestamp) ;
+
+  // resize the point cloud to new size if filtered
+  if (FILTER_INVALID_POINTS) 
+  {
+    ros_msg.width = valid_point_count;
+    ros_msg.row_step = ros_msg.width * ros_msg.point_step;
+    ros_msg.data.resize(valid_point_count * ros_msg.point_step);
+  }
+
+  printf("frame:%d points:%u packet:%d start time:%lf end time:%lf\n",frame.frame_index, valid_point_count, frame.packet_num, frame.points[0].timestamp, frame.points[frame.points_num - 1].timestamp) ;
   
   ros_msg.header.stamp.sec = (uint32_t)floor(frame.points[0].timestamp);
   ros_msg.header.stamp.nanosec = (uint32_t)round((frame.points[0].timestamp - ros_msg.header.stamp.sec) * 1e9);
