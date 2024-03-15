@@ -44,7 +44,7 @@
 #define FILTER_INVALID_POINTS
 
 /* @brief uncomment to add intensity fields for intensity information */
-#define ADD_INTENSITY_FIELD
+// #define ADD_INTENSITY_FIELD
 
 /* @brief uncomment to add intensity, ring, and timestamp fields for more pointcloud information */
 // #define ADD_EXTRA_FIELDS
