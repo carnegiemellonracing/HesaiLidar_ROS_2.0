@@ -40,8 +40,8 @@
 #include <string>
 #include <functional>
 
-/* @brief set to true to remove all points at the origin prior to publishing point cloud */
-#define FILTER_INVALID_POINTS true
+/* @brief uncomment to filter invalid points (e.g. points at the origin) prior to publishing point cloud */
+#define FILTER_INVALID_POINTS
 
 /* @brief uncomment to add intensity fields for intensity information */
 #define ADD_INTENSITY_FIELD
@@ -248,17 +248,20 @@ inline sensor_msgs::msg::PointCloud2 SourceDriver::ToRosMsg(const LidarDecodedFr
 #endif
 
   float eps = 0.000001;
-  uint32_t valid_point_count = 0;
+  uint32_t valid_point_count = frame.points_num;
 
   for (size_t i = 0; i < frame.points_num; i++)
   {
     LidarPointXYZIRT point = frame.points[i];
 
+#ifdef FILTER_INVALID_POINTS
     // ignore points that occur at the origin
-    if (FILTER_INVALID_POINTS && is_invalid_point(point)) 
+    if (is_invalid_point(point)) 
     { 
+      valid_point_count--;
       continue; 
     }
+#endif
 
     *iter_x_ = point.x;
     *iter_y_ = point.y;
@@ -277,18 +280,15 @@ inline sensor_msgs::msg::PointCloud2 SourceDriver::ToRosMsg(const LidarDecodedFr
     *iter_timestamp_ = point.timestamp;
     ++iter_ring_;
     ++iter_timestamp_;
-#endif
-
-    ++valid_point_count;   
+#endif   
   }
 
+#ifdef FILTER_INVALID_POINTS
   // resize the point cloud to new size if filtered
-  if (FILTER_INVALID_POINTS) 
-  {
-    ros_msg.width = valid_point_count;
-    ros_msg.row_step = ros_msg.width * ros_msg.point_step;
-    ros_msg.data.resize(valid_point_count * ros_msg.point_step);
-  }
+  ros_msg.width = valid_point_count;
+  ros_msg.row_step = ros_msg.width * ros_msg.point_step;
+  ros_msg.data.resize(valid_point_count * ros_msg.point_step);
+#endif
 
   printf("frame:%d points:%u packet:%d start time:%lf end time:%lf\n",frame.frame_index, valid_point_count, frame.packet_num, frame.points[0].timestamp, frame.points[frame.points_num - 1].timestamp) ;
   
