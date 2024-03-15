@@ -39,11 +39,15 @@
 #include <chrono>
 #include <string>
 #include <functional>
+
+#undef __CUDACC__ // remove this line to allow CUDA usage
 #ifdef __CUDACC__
   #include "hesai_lidar_sdk_gpu.cuh"
 #else
   #include "hesai_lidar_sdk.hpp"
 #endif
+
+
 class SourceDriver
 {
 public:
@@ -144,11 +148,12 @@ inline void SourceDriver::Init(const YAML::Node& config)
   #ifdef __CUDACC__
     driver_ptr_.reset(new HesaiLidarSdkGpu<LidarPointXYZIRT>());
     driver_param.decoder_param.enable_parser_thread = false;
+    printf("__CUDACC__ defined\n");
   #else
     driver_ptr_.reset(new HesaiLidarSdk<LidarPointXYZIRT>());
     driver_param.decoder_param.enable_parser_thread = true;
-    
-  #endif
+    printf("__CUDACC__ not defined\n");
+  #endif 
   driver_ptr_->RegRecvCallback(std::bind(&SourceDriver::SendPointCloud, this, std::placeholders::_1));
   if(send_packet_ros && driver_param.input_param.source_type != DATA_FROM_ROS_PACKET){
     driver_ptr_->RegRecvCallback(std::bind(&SourceDriver::SendPacket, this, std::placeholders::_1, std::placeholders::_2)) ;
@@ -232,7 +237,7 @@ inline sensor_msgs::msg::PointCloud2 SourceDriver::ToRosMsg(const LidarDecodedFr
     ++iter_timestamp_;   
   }
   printf("frame:%d points:%u packet:%d start time:%lf end time:%lf\n",frame.frame_index, frame.points_num, frame.packet_num, frame.points[0].timestamp, frame.points[frame.points_num - 1].timestamp) ;
-
+  
   ros_msg.header.stamp.sec = (uint32_t)floor(frame.points[0].timestamp);
   ros_msg.header.stamp.nanosec = (uint32_t)round((frame.points[0].timestamp - ros_msg.header.stamp.sec) * 1e9);
   ros_msg.header.frame_id = frame_id_;
