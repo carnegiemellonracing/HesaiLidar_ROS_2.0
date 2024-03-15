@@ -47,7 +47,7 @@
 #define ADD_INTENSITY_FIELD
 
 /* @brief uncomment to add intensity, ring, and timestamp fields for more pointcloud information */
-#define ADD_EXTRA_FIELDS
+// #define ADD_EXTRA_FIELDS
 
 #undef __CUDACC__ // remove this line to allow CUDA usage
 #ifdef __CUDACC__
